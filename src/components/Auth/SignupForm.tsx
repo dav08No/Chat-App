@@ -4,29 +4,29 @@ import React, { useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 
 export const SignUpForm = () => {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+    event.preventDefault();
 
     if (isSubmitting) {
-      return
+      return;
     }
 
     if (!email.trim() || !password.trim() || !name.trim()) {
-      setErrorMessage('Bitte Name, E-Mail und Passwort eingeben.')
-      setSuccessMessage(null)
-      return
+      setErrorMessage('Bitte Name, E-Mail und Passwort eingeben.');
+      setSuccessMessage(null);
+      return;
     }
 
-    setErrorMessage(null)
-    setSuccessMessage(null)
-    setIsSubmitting(true)
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsSubmitting(true);
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -34,9 +34,21 @@ export const SignUpForm = () => {
         password,
       })
 
+      const userName = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('display_name', name.trim())
+        .maybeSingle();
+
+      if (userName) {
+        setErrorMessage('Der Anzeigename ist bereits vergeben. Bitte wählen Sie einen anderen.');
+        setIsSubmitting(false);
+        return;
+      }
+
       if (error) {
-        setErrorMessage(error.message)
-        return
+        setErrorMessage(error.message);
+        return;
       }
 
       const userId = data.user?.id

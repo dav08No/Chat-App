@@ -40,6 +40,7 @@ export const LoginForm = () => {
 
       console.log('Successfully signed in:', data);
       router.push('/chat');
+      router.refresh();
 
     } catch (signInError) {
       setErrorMessage('Login fehlgeschlagen. Bitte erneut versuchen.')
@@ -96,4 +97,3 @@ export const LoginForm = () => {
     </form>
   )
 }
-

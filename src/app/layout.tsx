@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const DEFAULT_THEME = "sunset"; // Change this value to switch the global theme.
+const DEFAULT_THEME = "lilac"; // Change this value to switch the global theme.
 
 export const metadata: Metadata = {
   title: "Chat-App",

@@ -8,18 +8,17 @@ type ProtectedChatLayoutProps = {
 }
 
 export default async function ProtectedChatLayout({ children }: ProtectedChatLayoutProps) {
-  const session = await getServerSession()
+  const session = await getServerSession();
 
   if (!session) {
-    redirect('/auth/signin')
+    console.log('No session found, redirecting to /auth/signin');
+    redirect('/auth/signin');
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      <div className="hidden w-full max-w-xs border-r border-border/60 bg-background lg:flex">
-        <Sidebar userId={session.user.id} />
-      </div>
+    <div className="flex h-screen flex-col bg-background text-foreground lg:flex-row">
+      <Sidebar userId={session.user.id} />
       <div className="flex-1 overflow-hidden">{children}</div>
     </div>
-  )
-}
+  );
+};

@@ -1,9 +1,8 @@
 import { createClientForServer } from '@/lib/supabaseServer'
-import React from 'react'
 
-export default function chatPage() {
+export default async function ChatPage() {
 
-  const supabase = createClientForServer();
+  const supabase = await createClientForServer();
 
   return (
     <div>

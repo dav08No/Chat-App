@@ -1,23 +1,32 @@
-import 'server-only';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-import { Database } from '../../supabase/types/database.types';
+import 'server-only'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import type { Database } from '../../supabase/types/database.types'
 
 export async function getServerSession() {
-  const cookieStore = await cookies();
+  const cookieStore = await cookies()
 
-  const serverSupabase = createServerClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value ?? null;
+          return cookieStore.get(name)?.value ?? null
         },
-        set(_name: string, _value: string, _options: CookieOptions) { },
-        remove(_name: string, _options: CookieOptions) { },
+        set(_name: string, _value: string, _options: CookieOptions) {
+          // Server Components können keine Cookies setzen.
+        },
+        remove(_name: string, _options: CookieOptions) {
+          // Server Components können keine Cookies entfernen.
+        },
       },
     }
-  );
+  )
 
-  const { data: { session } } = await serverSupabase.auth.getSession();
-  return session;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  return session
 }
