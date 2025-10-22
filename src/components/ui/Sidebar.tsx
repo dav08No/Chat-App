@@ -31,5 +31,18 @@ export default async function Sidebar({ userId }: SidebarProps) {
       .order('created_at', { foreignTable: 'conversations', ascending: false }),
   ])
 
+  async function startNewConversation(invitedUserId: string) {
+    'use server'
+    supabase.from('conversations').insert({
+      is_group: false,
+      members: {
+        data: [
+          { user_id: userId },
+          { user_id: invitedUserId },
+        ],
+      },
+    })
+  }
+
   return <SidebarShell profileResult={profileResult} conversationsResult={conversationsResult} userId={userId} logoutAction={logoutAction} />
 }
