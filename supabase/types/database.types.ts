@@ -17,29 +17,65 @@ export type Database = {
       conversations: {
         Row: {
           created_at: string
+          created_by: string | null
           id: string
           is_group: boolean
+          last_message_at: string | null
           title: string | null
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           id?: string
           is_group?: boolean
+          last_message_at?: string | null
           title?: string | null
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           id?: string
           is_group?: boolean
+          last_message_at?: string | null
           title?: string | null
         }
         Relationships: []
+      }
+      direct_messages: {
+        Row: {
+          conversation_id: string
+          pair_key: string | null
+          user_a: string
+          user_b: string
+        }
+        Insert: {
+          conversation_id: string
+          pair_key?: string | null
+          user_a: string
+          user_b: string
+        }
+        Update: {
+          conversation_id?: string
+          pair_key?: string | null
+          user_a?: string
+          user_b?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       members: {
         Row: {
           conversation_id: string
           id: string
           joined_at: string
+          last_read_at: string | null
           role: string
           user_id: string
         }
@@ -47,6 +83,7 @@ export type Database = {
           conversation_id: string
           id?: string
           joined_at?: string
+          last_read_at?: string | null
           role?: string
           user_id: string
         }
@@ -54,6 +91,7 @@ export type Database = {
           conversation_id?: string
           id?: string
           joined_at?: string
+          last_read_at?: string | null
           role?: string
           user_id?: string
         }
@@ -72,6 +110,8 @@ export type Database = {
           content: string
           conversation_id: string
           created_at: string
+          deleted_at: string | null
+          edited_at: string | null
           id: string
           sender_id: string
         }
@@ -79,6 +119,8 @@ export type Database = {
           content: string
           conversation_id: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           sender_id: string
         }
@@ -86,6 +128,8 @@ export type Database = {
           content?: string
           conversation_id?: string
           created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
           id?: string
           sender_id?: string
         }

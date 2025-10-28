@@ -1,10 +1,8 @@
 'use client'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { IoMdCloseCircleOutline } from 'react-icons/io'
 import { RiTeamFill } from 'react-icons/ri'
-import { supabase } from '../../lib/supabaseClient'
-import { start } from 'repl'
 
 type ProfileResult = {
   data: {
@@ -29,12 +27,19 @@ export type ConversationSummary = {
   createdAt: string
 }
 
+export type ProfileSuggestion = {
+  id: string
+  displayName: string
+}
+
 export type SidebarShellProps = {
   profileResult: ProfileResult
   conversationsResult: { data: MemberWithConversation[] | null }
   userId: string
   logoutAction: () => Promise<void>
   startNewConversation: (invitedUserId: string) => Promise<void>
+  getUserId: (name: string) => Promise<string | undefined>
+  searchProfiles: (query: string) => Promise<ProfileSuggestion[]>
 }
 
 export default function SidebarShell({
@@ -43,10 +48,18 @@ export default function SidebarShell({
   userId,
   logoutAction,
   startNewConversation,
+  getUserId,
+  searchProfiles,
 }: SidebarShellProps) {
 
   const [surchName, setSurchName] = useState<string>('');
-  const displayName = profileResult.data?.display_name ?? 'Du'
+  const [profileSuggestions, setProfileSuggestions] = useState<ProfileSuggestion[]>([])
+  const [isSearchingProfiles, setIsSearchingProfiles] = useState<boolean>(false)
+  const [searchFeedback, setSearchFeedback] = useState<string | null>(null)
+  const [isCreatingConversation, setIsCreatingConversation] = useState<boolean>(false)
+  const searchRequestIdRef = useRef(0)
+
+  const displayName: string = profileResult.data?.display_name ?? 'Du'
   const conversations: ConversationSummary[] = (conversationsResult.data ?? [])
     .map((member) => {
       if (!member.conversations) {
@@ -66,13 +79,86 @@ export default function SidebarShell({
       ): conversation is ConversationSummary => Boolean(conversation),
     );
 
-  const possibleNewConversations = conversations.filter((conversation) =>
-    conversation.title
-      ? conversation.title.toLowerCase().includes(surchName.toLowerCase())
-      : 'Direkter Chat'.toLowerCase().includes(surchName.toLowerCase()),
-  );
+  const normalizedSearchTerm = surchName.trim().toLowerCase()
+
+  const filteredConversations: ConversationSummary[] = useMemo(() => {
+    if (!normalizedSearchTerm) {
+      return conversations
+    }
+
+    return conversations.filter((conversation) => {
+      const label = conversation.title || 'Direkter Chat'
+      return label.toLowerCase().includes(normalizedSearchTerm)
+    })
+  }, [normalizedSearchTerm, conversations])
+
+  useEffect(() => {
+    setSearchFeedback(null)
+  }, [surchName])
+
+  useEffect(() => {
+    const query = surchName.trim()
+
+    if (!query) {
+      searchRequestIdRef.current += 1
+      setProfileSuggestions([])
+      setIsSearchingProfiles(false)
+      return
+    }
+
+    const currentRequestId = searchRequestIdRef.current + 1
+    searchRequestIdRef.current = currentRequestId
+    setIsSearchingProfiles(true)
+
+    const timeoutId = setTimeout(() => {
+      searchProfiles(query)
+        .then((results) => {
+          if (searchRequestIdRef.current !== currentRequestId) {
+            return
+          }
+          setProfileSuggestions(results)
+        })
+        .catch((error) => {
+          if (searchRequestIdRef.current !== currentRequestId) {
+            return
+          }
+          console.error('Fehler beim Suchen nach Profilen', error)
+          setProfileSuggestions([])
+        })
+        .finally(() => {
+          if (searchRequestIdRef.current !== currentRequestId) {
+            return
+          }
+          setIsSearchingProfiles(false)
+        })
+    }, 250)
+
+    return () => {
+      clearTimeout(timeoutId)
+    }
+  }, [surchName, searchProfiles])
+
+  const handleStartConversation = async (invitedUserId: string) => {
+    if (!invitedUserId) {
+      return
+    }
+
+    setIsCreatingConversation(true)
+    try {
+      await startNewConversation(invitedUserId)
+      setSurchName('')
+      setProfileSuggestions([])
+      setSearchFeedback(null)
+    } catch (error) {
+      console.error('Fehler beim Starten einer Unterhaltung', error)
+      setSearchFeedback('Chat konnte nicht gestartet werden.')
+    } finally {
+      setIsCreatingConversation(false)
+    }
+  }
 
   const toggleId = `chat-sidebar-toggle-${userId}`
+  const hasActiveSearch = Boolean(surchName.trim())
 
   const listSection = (
     <>
@@ -86,27 +172,82 @@ export default function SidebarShell({
             onChange={(e) => setSurchName(e.target.value)}
           />
         </div>
-        <button
+        {/* <button
           type="button"
           className="w-full rounded-md bg-[color:var(--accent-color)] px-3 py-2 text-sm font-medium text-[color:var(--accent-color-foreground)] shadow-sm transition hover:opacity-90"
           onClick={async () => {
-            startNewConversation(surchName); {/* Have to be the user ID not the name */ }
-            setSurchName('');
+            const query = surchName.trim()
+            if (!query) {
+              setSearchFeedback('Bitte gib einen Namen ein.')
+              return
+            }
+
+            try {
+              const targetUserId = await getUserId(query);
+
+              if (!targetUserId) {
+                setSearchFeedback('Kein Nutzer mit diesem Namen gefunden.')
+                return
+              }
+
+              await handleStartConversation(targetUserId);
+            } catch (error) {
+              console.error('Fehler beim Ermitteln des Benutzers', error)
+              setSearchFeedback('Suche fehlgeschlagen. Bitte versuche es erneut.')
+            }
           }
           }
+          disabled={isCreatingConversation}
         >
           Neuen Chat starten
-        </button>
+        </button> */}
+        {searchFeedback ? (
+          <p className="px-1 text-xs text-muted-foreground">{searchFeedback}</p>
+        ) : null}
       </div>
+
+      {hasActiveSearch ? (
+        <div className="border-b border-border/60 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Neue Kontakte
+          </p>
+          {isSearchingProfiles ? (
+            <p className="mt-2 text-sm text-muted-foreground">Suche...</p>
+          ) : profileSuggestions.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Keine passenden Kontakte gefunden.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {profileSuggestions.map((profile) => (
+                <li key={profile.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-md border border-border px-3 py-2 text-left text-sm transition hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-70"
+                    onClick={() => handleStartConversation(profile.id)}
+                    disabled={isCreatingConversation}
+                  >
+                    {profile.displayName}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
 
       <nav className="flex-1 overflow-y-auto">
         {conversations.length === 0 ? (
           <div className="flex h-full items-center justify-center px-4 text-sm text-muted-foreground">
             Noch keine Chats. Starte eine Unterhaltung!
           </div>
+        ) : filteredConversations.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-4 text-sm text-muted-foreground">
+            Keine passenden Chats gefunden.
+          </div>
         ) : (
           <ul className="divide-y divide-border/40">
-            {conversations.map((conversation: ConversationSummary) => {
+            {filteredConversations.map((conversation: ConversationSummary) => {
               const label = conversation.title || 'Direkter Chat'
 
               return (
