@@ -1,8 +1,10 @@
 'use client'
+import { SupabaseClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IoMdCloseCircleOutline } from 'react-icons/io'
 import { RiTeamFill } from 'react-icons/ri'
+import { supabase } from '@/lib/supabaseClient'
 
 type ProfileResult = {
   data: {
@@ -172,35 +174,7 @@ export default function SidebarShell({
             onChange={(e) => setSurchName(e.target.value)}
           />
         </div>
-        {/* <button
-          type="button"
-          className="w-full rounded-md bg-[color:var(--accent-color)] px-3 py-2 text-sm font-medium text-[color:var(--accent-color-foreground)] shadow-sm transition hover:opacity-90"
-          onClick={async () => {
-            const query = surchName.trim()
-            if (!query) {
-              setSearchFeedback('Bitte gib einen Namen ein.')
-              return
-            }
-
-            try {
-              const targetUserId = await getUserId(query);
-
-              if (!targetUserId) {
-                setSearchFeedback('Kein Nutzer mit diesem Namen gefunden.')
-                return
-              }
-
-              await handleStartConversation(targetUserId);
-            } catch (error) {
-              console.error('Fehler beim Ermitteln des Benutzers', error)
-              setSearchFeedback('Suche fehlgeschlagen. Bitte versuche es erneut.')
-            }
-          }
-          }
-          disabled={isCreatingConversation}
-        >
-          Neuen Chat starten
-        </button> */}
+        
         {searchFeedback ? (
           <p className="px-1 text-xs text-muted-foreground">{searchFeedback}</p>
         ) : null}

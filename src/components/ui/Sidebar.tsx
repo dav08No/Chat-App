@@ -3,6 +3,7 @@ import React from 'react'
 import { redirect } from 'next/navigation'
 import { createClientForServer } from '@/lib/supabaseServer'
 import SidebarShell from './SidebarShell'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 type SidebarProps = {
   userId: string
@@ -18,16 +19,20 @@ async function logoutAction() {
 export default async function Sidebar({ userId }: SidebarProps) {
   const supabase = await createClientForServer();
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if(!user) redirect('/auth/signin')
+  const me = user?.id
+
   const [profileResult, conversationsResult] = await Promise.all([
     supabase
       .from('profiles')
       .select('display_name')
-      .eq('id', userId)
+      .eq('id', me)
       .maybeSingle(),
     supabase
       .from('members')
       .select('conversation_id, conversations ( id, title, is_group, created_at )')
-      .eq('user_id', userId)
+      .eq('user_id', me)
       .order('created_at', { foreignTable: 'conversations', ascending: false }),
   ])
 
@@ -36,19 +41,19 @@ export default async function Sidebar({ userId }: SidebarProps) {
 
     const supabaseClient = await createClientForServer()
 
-    if (invitedUserId === userId || !invitedUserId) {
+    if (invitedUserId === me || !invitedUserId) {
       throw new Error('Invited user ID is required and cannot be the same as the current user ID.')
     }
 
     let lowerId: string
     let higherId: string
 
-    if (userId < invitedUserId) {
-      lowerId = userId
+    if (me < invitedUserId) {
+      lowerId = me
       higherId = invitedUserId
     } else {
       lowerId = invitedUserId
-      higherId = userId
+      higherId = me
     }
 
     const pairKey = `${lowerId}_${higherId}`
@@ -70,19 +75,20 @@ export default async function Sidebar({ userId }: SidebarProps) {
 
     const { data: newConversation, error: conversationError } = await supabaseClient
       .from('conversations')
-      .insert({ is_group: false, created_by: userId, title: null, last_message_at: new Date().toISOString() })
-      .select('id');
+      .insert({ is_group: false, created_by: me, title: null, last_message_at: new Date().toISOString() })
+      .select('id')
+      .single();
 
-    const newConversationId = newConversation?.[0]?.id;
+      if (conversationError || !newConversation.id) {
+        console.error('Error creating new conversation:', conversationError, newConversation)
+        throw new Error('Failed to create new conversation.')
+      }
+    const newConversationId = newConversation.id;
 
-    if (conversationError || !newConversationId) {
-      console.error('Error creating new conversation:', conversationError, newConversation)
-      throw new Error('Failed to create new conversation.')
-    }
 
     const { error: membersError } = await supabaseClient
       .from('direct_messages')
-      .insert({ conversation_id: newConversationId, user_a: userId, user_b: invitedUserId });
+      .insert({ conversation_id: newConversationId, user_a: me, user_b: invitedUserId });
     if (membersError) {
       console.error('Error creating direct message entry:', membersError)
       throw new Error('Failed to create direct message entry.')
@@ -91,9 +97,10 @@ export default async function Sidebar({ userId }: SidebarProps) {
     const { error: membersInsertError } = await supabaseClient
       .from('members')
       .insert([
-        { conversation_id: newConversationId, user_id: userId, last_read_at: new Date().toISOString(), role: 'member' },
-        { conversation_id: newConversationId, user_id: invitedUserId },
+        { conversation_id: newConversationId, user_id: me, last_read_at: new Date().toISOString(), role: 'member' },
+        { conversation_id: newConversationId, user_id: invitedUserId, last_read_at: new Date().toISOString(), role: 'member' },
       ]);
+
     if (membersInsertError) {
       console.error('Error adding members to conversation:', membersInsertError)
       throw new Error('Failed to add members to conversation.')
@@ -133,7 +140,7 @@ export default async function Sidebar({ userId }: SidebarProps) {
       .from('profiles')
       .select('id, display_name')
       .ilike('display_name', `%${trimmedQuery}%`)
-      .neq('id', userId)
+      .neq('id', me)
       .limit(5);
 
     if (error || !data) {
@@ -156,7 +163,7 @@ export default async function Sidebar({ userId }: SidebarProps) {
     <SidebarShell
       profileResult={profileResult}
       conversationsResult={conversationsResult}
-      userId={userId}
+      userId={me}
       logoutAction={logoutAction}
       startNewConversation={startNewConversation}
       getUserId={getUserId}
