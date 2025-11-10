@@ -38,13 +38,11 @@ export const LoginForm = () => {
         return
       }
 
-      console.log('Successfully signed in:', data);
       router.push('/chat');
       router.refresh();
 
     } catch (signInError) {
       setErrorMessage('Login fehlgeschlagen. Bitte erneut versuchen.')
-      console.log('Unexpected error signing in:', signInError)
     } finally {
       setIsSubmitting(false)
     }

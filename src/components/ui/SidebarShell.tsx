@@ -6,6 +6,7 @@ import { IoMdCloseCircleOutline } from 'react-icons/io'
 import { RiTeamFill } from 'react-icons/ri'
 import { supabase } from '@/lib/supabaseClient'
 import { ImBin2 } from 'react-icons/im'
+import { MdEdit } from 'react-icons/md'
 
 type ProfileResult = {
   data: {
@@ -44,6 +45,7 @@ export type SidebarShellProps = {
   getUserId: (name: string) => Promise<string | undefined>
   searchProfiles: (query: string) => Promise<ProfileSuggestion[]>
   deleteConversation: (conversationId: string) => Promise<void>
+  editConversationTitle: (conversationId: string, newTitle: string) => Promise<void>
 }
 
 function mapConversations(data: MemberWithConversation[] | null): ConversationSummary[] {
@@ -69,6 +71,7 @@ export default function SidebarShell({
   startNewConversation,
   searchProfiles,
   deleteConversation,
+  editConversationTitle,
 }: SidebarShellProps) {
 
   const [surchName, setSurchName] = useState<string>('');
@@ -76,6 +79,9 @@ export default function SidebarShell({
   const [isSearchingProfiles, setIsSearchingProfiles] = useState<boolean>(false)
   const [searchFeedback, setSearchFeedback] = useState<string | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState<boolean>(false)
+  const [showEditModal, setShowEditModal] = useState<boolean>(false)
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null)
+  const [newTitle, setNewTitle] = useState<string>('');
   const searchRequestIdRef = useRef(0)
   const [conversations, setConversations] = useState<ConversationSummary[]>(() =>
     mapConversations(conversationsResult.data)
@@ -147,6 +153,38 @@ export default function SidebarShell({
       .subscribe()
 
     return () => { supabase.removeChannel(channelDeleteConversations) }
+  }, [userId])
+
+  useEffect(() => {
+    const channelEditConversations = supabase
+      .channel(`public:sidebar-convs-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'conversations' },
+        (payload) => {
+          const updatedConversation = payload.new as {
+            id: string
+            title: string | null
+            is_group: boolean
+            created_at: string
+          }
+          setConversations(prev =>
+            prev.map(c =>
+              c.id === updatedConversation.id
+                ? {
+                  id: updatedConversation.id,
+                  title: updatedConversation.title,
+                  isGroup: updatedConversation.is_group,
+                  createdAt: updatedConversation.created_at,
+                }
+                : c
+            )
+          )
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channelEditConversations) }
   }, [userId])
 
 
@@ -308,6 +346,18 @@ export default function SidebarShell({
                     >
                       <ImBin2 className="w-4 h-4" />
                     </button>
+                    <button
+                      type="button"
+                      className="p-2 text-muted-foreground rounded-lg opacity-70 transition hover:opacity-100 hover:text-orange-500 hover:bg-orange-100"
+                      title="Titel der Konversation bearbeiten"
+                      onClick={() => {
+                        setEditingConversationId(conversation.id)
+                        setNewTitle(conversation.title ?? '')
+                        setShowEditModal(true)
+                      }}
+                    >
+                      <MdEdit className="w-4 h-4" />
+                    </button>
                   </Link>
                 </li>
               )
@@ -315,6 +365,36 @@ export default function SidebarShell({
           </ul>
         )}
       </nav>
+
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-background p-6 rounded-md shadow-lg">
+            <h2 className="text-lg font-semibold mb-4">Konversationstitel bearbeiten</h2>
+            <input
+              type="text"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              placeholder="Neuer Titel"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+            />
+            <button
+              type="button"
+              className="mt-4 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted/60"
+              onClick={async () => {
+                if (!editingConversationId || !newTitle.trim()) return
+                await editConversationTitle(editingConversationId, newTitle.trim())
+                setShowEditModal(false)
+                setEditingConversationId(null)
+                setNewTitle('')
+              }}
+            >
+              Speichern
+            </button>
+
+          </div>
+        </div>
+      )}
+
 
       <footer className="border-t border-border/60 px-4 py-3">
         <form action={logoutAction}>

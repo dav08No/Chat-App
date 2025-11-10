@@ -182,6 +182,20 @@ export default async function Sidebar({ userId }: SidebarProps) {
 
   }
 
+  async function editConversationTitle(conversationId: string, newTitle: string) {
+    'use server'
+    const supabaseClient = await createClientForServer()
+    const { data, error } = await supabaseClient
+      .from('conversations')
+      .update({ title: newTitle })
+      .eq('id', conversationId)
+    if (error) {
+      console.error('Error updating conversation title:', error)
+      throw new Error('Failed to update conversation title.')
+    }
+  }
+
+
   return (
     <SidebarShell
       profileResult={profileResult}
@@ -192,6 +206,7 @@ export default async function Sidebar({ userId }: SidebarProps) {
       getUserId={getUserId}
       searchProfiles={searchProfiles}
       deleteConversation={deleteConversation}
+      editConversationTitle={editConversationTitle}
     />
   )
 }

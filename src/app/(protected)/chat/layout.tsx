@@ -11,7 +11,6 @@ export default async function ProtectedChatLayout({ children }: ProtectedChatLay
   const session = await getServerSession();
 
   if (!session) {
-    console.log('No session found, redirecting to /auth/signin');
     redirect('/auth/signin');
   }
 

@@ -34,7 +34,6 @@ export const SignUpForm = () => {
         .maybeSingle()
 
       if (nameCheckError && nameCheckError.code !== 'PGRST116') {
-        console.log('nameCheckError', nameCheckError)
         setErrorMessage('Fehler beim Pruefen vom Anzeigenamen.')
         return
       }
@@ -77,7 +76,6 @@ export const SignUpForm = () => {
         )
 
       if (profileError) {
-        console.log('profileError', profileError)
         setErrorMessage('Profil konnte nicht gespeichert werden.')
         return
       }
@@ -87,7 +85,6 @@ export const SignUpForm = () => {
       setEmail('')
       setPassword('')
     } catch (err) {
-      console.log('Unexpected error signing up:', err)
       setErrorMessage('Registrierung fehlgeschlagen. Bitte erneut versuchen.')
     } finally {
       setIsSubmitting(false)
