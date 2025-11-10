@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { IoMdCloseCircleOutline } from 'react-icons/io'
 import { RiTeamFill } from 'react-icons/ri'
 import { supabase } from '@/lib/supabaseClient'
+import { ImBin2 } from 'react-icons/im'
 
 type ProfileResult = {
   data: {
@@ -42,7 +43,23 @@ export type SidebarShellProps = {
   startNewConversation: (invitedUserId: string) => Promise<void>
   getUserId: (name: string) => Promise<string | undefined>
   searchProfiles: (query: string) => Promise<ProfileSuggestion[]>
+  deleteConversation: (conversationId: string) => Promise<void>
 }
+
+function mapConversations(data: MemberWithConversation[] | null): ConversationSummary[] {
+  return (data ?? [])
+    .map((member) => {
+      const c = member.conversations
+      return c && {
+        id: c.id,
+        title: c.title,
+        isGroup: c.is_group,
+        createdAt: c.created_at,
+      }
+    })
+    .filter((c): c is ConversationSummary => Boolean(c))
+}
+
 
 export default function SidebarShell({
   profileResult,
@@ -50,8 +67,8 @@ export default function SidebarShell({
   userId,
   logoutAction,
   startNewConversation,
-  getUserId,
   searchProfiles,
+  deleteConversation,
 }: SidebarShellProps) {
 
   const [surchName, setSurchName] = useState<string>('');
@@ -60,39 +77,79 @@ export default function SidebarShell({
   const [searchFeedback, setSearchFeedback] = useState<string | null>(null)
   const [isCreatingConversation, setIsCreatingConversation] = useState<boolean>(false)
   const searchRequestIdRef = useRef(0)
+  const [conversations, setConversations] = useState<ConversationSummary[]>(() =>
+    mapConversations(conversationsResult.data)
+  )
 
-  const displayName: string = profileResult.data?.display_name ?? 'Du'
-  const conversations: ConversationSummary[] = (conversationsResult.data ?? [])
-    .map((member) => {
-      if (!member.conversations) {
-        return null
-      }
+  const normalizedSearchTerm = useMemo(() => surchName.trim().toLowerCase(), [surchName])
 
-      return {
-        id: member.conversations.id,
-        title: member.conversations.title,
-        isGroup: member.conversations.is_group,
-        createdAt: member.conversations.created_at,
-      }
-    })
-    .filter(
-      (
-        conversation,
-      ): conversation is ConversationSummary => Boolean(conversation),
-    );
-
-  const normalizedSearchTerm = surchName.trim().toLowerCase()
+  useEffect(() => {
+    setConversations(mapConversations(conversationsResult.data))
+  }, [conversationsResult.data])
 
   const filteredConversations: ConversationSummary[] = useMemo(() => {
-    if (!normalizedSearchTerm) {
-      return conversations
-    }
-
+    if (!normalizedSearchTerm) return conversations
     return conversations.filter((conversation) => {
       const label = conversation.title || 'Direkter Chat'
       return label.toLowerCase().includes(normalizedSearchTerm)
     })
   }, [normalizedSearchTerm, conversations])
+
+  useEffect(() => {
+    const channelMembers = supabase
+      .channel(`public:sidebar-members-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'members', filter: `user_id=eq.${userId}` },
+        async (payload) => {
+          const conversationID = payload.new.conversation_id as string
+
+          // Duplikate vermeiden mit prev, nicht mit conversations (stale)
+          let already = false
+          setConversations((prev) => {
+            already = prev.some(c => c.id === conversationID)
+            return prev
+          })
+          if (already) return
+
+          const { data, error } = await supabase
+            .from('conversations')
+            .select('id, title, is_group, created_at')
+            .eq('id', conversationID)
+            .maybeSingle()
+
+          if (!error && data) {
+            setConversations((prev) => [
+              { id: data.id, title: data.title, isGroup: data.is_group, createdAt: data.created_at },
+              ...prev,
+            ])
+          } else if (error) {
+            console.error('Fehler beim Abrufen der neuen Konversation:', error)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channelMembers) }
+  }, [userId])
+
+  useEffect(() => {
+    const channelDeleteConversations = supabase
+      .channel(`public:sidebar-conversations-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'conversations' },
+        (payload) => {
+          const deletedConversationID = payload.old.id as string
+          setConversations((prev) => prev.filter(c => c.id !== deletedConversationID))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channelDeleteConversations) }
+  }, [userId])
+
+
 
   useEffect(() => {
     setSearchFeedback(null)
@@ -161,6 +218,7 @@ export default function SidebarShell({
 
   const toggleId = `chat-sidebar-toggle-${userId}`
   const hasActiveSearch = Boolean(surchName.trim())
+  const displayName: string = profileResult.data?.display_name ?? 'Du'
 
   const listSection = (
     <>
@@ -174,7 +232,7 @@ export default function SidebarShell({
             onChange={(e) => setSurchName(e.target.value)}
           />
         </div>
-        
+
         {searchFeedback ? (
           <p className="px-1 text-xs text-muted-foreground">{searchFeedback}</p>
         ) : null}
@@ -228,12 +286,28 @@ export default function SidebarShell({
                 <li key={conversation.id}>
                   <Link
                     href={`/chat/${conversation.id}`}
-                    className="flex flex-col gap-1 px-4 py-3 text-sm transition hover:bg-muted/60"
+                    className="group flex items-center justify-between gap-2 px-4 py-3 text-sm transition hover:bg-muted/60"
                   >
-                    <span className="font-medium text-foreground">{label}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(conversation.createdAt).toLocaleDateString()}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground">{label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(conversation.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="p-2 text-muted-foreground rounded-lg opacity-70 transition hover:opacity-100 hover:text-red-500 hover:bg-red-100"
+                      title="Konversation löschen"
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setConversations(prev => prev.filter(c => c.id !== conversation.id))
+                        await deleteConversation(conversation.id)
+                      }}
+                    >
+                      <ImBin2 className="w-4 h-4" />
+                    </button>
                   </Link>
                 </li>
               )

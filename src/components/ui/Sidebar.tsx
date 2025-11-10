@@ -20,7 +20,7 @@ export default async function Sidebar({ userId }: SidebarProps) {
   const supabase = await createClientForServer();
 
   const { data: { user } } = await supabase.auth.getUser()
-  if(!user) redirect('/auth/signin')
+  if (!user) redirect('/auth/signin')
   const me = user?.id
 
   const [profileResult, conversationsResult] = await Promise.all([
@@ -73,16 +73,23 @@ export default async function Sidebar({ userId }: SidebarProps) {
       redirect(`/chat/${exististingDm.conversation_id}`);
     }
 
+    const title = await supabaseClient
+      .from('profiles')
+      .select('display_name')
+      .eq('id', invitedUserId)
+      .maybeSingle()
+      .then(({ data }) => data?.display_name || 'New Chat');
+
     const { data: newConversation, error: conversationError } = await supabaseClient
       .from('conversations')
-      .insert({ is_group: false, created_by: me, title: null, last_message_at: new Date().toISOString() })
+      .insert({ is_group: false, created_by: me, title: title, last_message_at: new Date().toISOString() })
       .select('id')
       .single();
 
-      if (conversationError || !newConversation.id) {
-        console.error('Error creating new conversation:', conversationError, newConversation)
-        throw new Error('Failed to create new conversation.')
-      }
+    if (conversationError || !newConversation.id) {
+      console.error('Error creating new conversation:', conversationError, newConversation)
+      throw new Error('Failed to create new conversation.')
+    }
     const newConversationId = newConversation.id;
 
 
@@ -159,6 +166,22 @@ export default async function Sidebar({ userId }: SidebarProps) {
       }))
   }
 
+  async function deleteConversation(conversationId: string) {
+    'use server'
+    const supabaseClient = await createClientForServer()
+
+    const { data, error } = await supabaseClient
+      .from('conversations')
+      .delete()
+      .eq('id', conversationId)
+
+    if (error) {
+      console.error('Error deleting conversation:', error)
+      throw new Error('Failed to delete conversation.')
+    }
+
+  }
+
   return (
     <SidebarShell
       profileResult={profileResult}
@@ -168,6 +191,7 @@ export default async function Sidebar({ userId }: SidebarProps) {
       startNewConversation={startNewConversation}
       getUserId={getUserId}
       searchProfiles={searchProfiles}
+      deleteConversation={deleteConversation}
     />
   )
 }

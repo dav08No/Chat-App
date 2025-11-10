@@ -6,7 +6,7 @@ export default async function ChatPage() {
 
   return (
     <div>
-
+      hello chat page
     </div>
   )
 }
