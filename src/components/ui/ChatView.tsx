@@ -2,14 +2,16 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import MessageBox from './MessageBox'
+import MessageInput from './MessageInput'
 
 type ChatViewProps = {
   initialMessages?: Message[]
   me: string
   conversationId: string
+  onSend: (content: string) => Promise<void>
 }
 
-export default function ChatView({ initialMessages, me, conversationId }: ChatViewProps) {
+export default function ChatView({ initialMessages, me, conversationId, onSend }: ChatViewProps) {
 
   const [messages, setMessages] = useState<Message[]>(initialMessages || [])
 
@@ -42,11 +44,13 @@ export default function ChatView({ initialMessages, me, conversationId }: ChatVi
   }, [conversationId])
 
   return (
-    <div>
-      {messages.map((message: Message) => (
-        <MessageBox key={message.id} {...message} />
-      ))}
-    </div>
+    <>
+      <div>
+        {messages.map((message: Message) => (
+          <MessageBox key={message.id} {...message} />
+        ))}
+      </div>
+      <MessageInput onSend={onSend} conversationId={conversationId} />
+    </>
   )
 }
-

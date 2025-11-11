@@ -2,17 +2,13 @@ import { createClientForServer } from '@/lib/supabaseServer'
 import ChatView from '@/components/ui/ChatView'
 import { redirect } from 'next/navigation'
 
-type PageProps = {
-  params: { chatId: string }
-}
-
-export default async function ChatPage({ params }: PageProps) {
+export default async function ChatPage(params: Promise<{ conversationId: string }>) {
   const supabase = await createClientForServer()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/signin')
   const me = user.id
-  const conversationId = params.chatId
+  const { conversationId } = await params
 
   const { data: membership } = await supabase
     .from('members')
@@ -37,12 +33,30 @@ export default async function ChatPage({ params }: PageProps) {
     redirect('/chat')
   }
 
+  async function handleSendMessage(content: string) {
+    const { error } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: me,
+        content: content,
+        edited_at: null,
+        deleted_at: null,
+        isReaded: false
+      })
+
+    if (error) {
+      console.error('Error sending message:', error)
+    }
+  }
+
   return (
     <div>
       <ChatView
         initialMessages={messages ?? []}
         me={me}
         conversationId={conversationId}
+        onSend={handleSendMessage}
       />
     </div>
   )
